@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EV range predictor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0A0E13; --panel:#10161D; --panel-2:#141C24;
+  --line: rgba(255,255,255,.09); --line-strong: rgba(255,255,255,.16);
+  --text:#E7EDF2; --dim:#8A98A5; --dim2:#5C6975;
+  --cyan:#4FD1C5; --cyan-dim:#2E5A56;
+  --amber:#FF9F45; --amber-dim:#5C4326;
+  --red:#FF5B4E;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+  --sans:'Space Grotesk',system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:
+    radial-gradient(1200px 600px at 12% -10%, rgba(79,209,197,.05), transparent 60%),
+    radial-gradient(900px 500px at 100% 0%, rgba(255,159,69,.04), transparent 55%),
+    var(--bg);
+  color:var(--text); font-family:var(--sans); font-size:15px; line-height:1.5;
+  padding:28px 20px 72px;
+}
+.shell{max-width:1180px;margin:0 auto}
+
+/* header */
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;
+  padding-bottom:18px;margin-bottom:22px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+h1{font-size:20px;font-weight:600;letter-spacing:-0.01em}
+.tag{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11.5px;color:var(--dim)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--cyan);box-shadow:0 0 8px var(--cyan)}
+.source{font-size:12.5px;color:var(--dim2);max-width:60ch;margin-top:4px}
+
+.layout{display:grid;grid-template-columns:300px 1fr;gap:18px;align-items:start}
+@media (max-width:900px){.layout{grid-template-columns:1fr}}
+
+/* control rail */
+.rail{background:var(--panel);border:1px solid var(--line);border-radius:3px;padding:20px}
+.rail h2{font-size:11.5px;font-weight:500;color:var(--dim);text-transform:none;
+  padding-bottom:12px;margin-bottom:14px;border-bottom:1px solid var(--line)}
+.field{margin-bottom:18px}
+.field-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px}
+.field-head label{font-size:13px;color:var(--dim)}
+.field-head output{font-family:var(--mono);font-size:13.5px;font-weight:500;color:var(--text)}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:none;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:var(--line-strong);border-radius:1px}
+input[type=range]::-moz-range-track{height:2px;background:var(--line-strong);border-radius:1px}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+  background:var(--cyan);box-shadow:0 0 0 3px rgba(79,209,197,.18);margin-top:-6px;
+}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--cyan);border:0;box-shadow:0 0 0 3px rgba(79,209,197,.18)}
+input[type=range]:focus-visible{outline:2px solid var(--cyan);outline-offset:5px}
+
+button{
+  font:inherit;font-weight:600;font-size:13.5px;width:100%;padding:12px;margin-top:4px;
+  cursor:pointer;background:var(--cyan);color:#06201D;border:0;border-radius:3px;
+  transition:background .15s;
+}
+button:hover{background:#68DED2}
+button:focus-visible{outline:2px solid var(--text);outline-offset:2px}
+
+/* hero gauge panel */
+.hero{background:var(--panel);border:1px solid var(--line);border-radius:3px;
+  padding:22px 26px;display:grid;grid-template-columns:auto 1fr;gap:26px;align-items:center}
+@media (max-width:560px){.hero{grid-template-columns:1fr;justify-items:center;text-align:center}}
+.gauge-wrap{position:relative;width:190px;height:190px;flex:none}
+.gauge-num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.gauge-num .km{font-family:var(--mono);font-size:38px;font-weight:600;letter-spacing:-0.02em;line-height:1}
+.gauge-num .unit{font-size:12px;color:var(--dim);margin-top:2px}
+.hero-side h2{font-size:11.5px;font-weight:500;color:var(--dim);margin-bottom:8px}
+.hero-side .lead{font-size:14.5px;color:var(--text);max-width:34ch}
+.hero-side .lead b{font-family:var(--mono);font-weight:600;color:var(--cyan)}
+.error{color:var(--red);font-size:13.5px;font-weight:500;margin-top:10px}
+
+/* two-up panel: consumption stat + histogram */
+.two{display:grid;grid-template-columns:200px 1fr;gap:0}
+@media (max-width:700px){.two{grid-template-columns:1fr}}
+.split-panel{background:var(--panel);border:1px solid var(--line);border-radius:3px;
+  margin-top:16px;display:grid;grid-template-columns:200px 1fr}
+@media (max-width:700px){.split-panel{grid-template-columns:1fr}}
+.cell{padding:20px 22px}
+.cell + .cell{border-left:1px solid var(--line)}
+@media (max-width:700px){.cell + .cell{border-left:0;border-top:1px solid var(--line)}}
+.cell h2{font-size:11.5px;font-weight:500;color:var(--dim);margin-bottom:10px}
+.wh-stat{font-family:var(--mono);font-size:32px;font-weight:600;letter-spacing:-0.02em}
+.wh-stat small{font-family:var(--sans);font-size:13px;font-weight:400;color:var(--dim);margin-left:5px}
+.wh-cap{font-size:12.5px;color:var(--dim2);margin-top:6px;line-height:1.5}
+
+/* levers panel */
+.levers-panel{background:var(--panel);border:1px solid var(--line);border-radius:3px;
+  margin-top:16px;padding:20px 22px}
+.levers-panel h2{font-size:11.5px;font-weight:500;color:var(--dim);margin-bottom:14px}
+.lever{padding:13px 0;border-top:1px solid var(--line);display:grid;
+  grid-template-columns:1fr auto;gap:4px 16px;align-items:baseline}
+.lever:first-of-type{border-top:0;padding-top:2px}
+.lever .name{font-size:13.5px}
+.lever .gain{font-family:var(--mono);font-size:13.5px;font-weight:600;color:var(--cyan);white-space:nowrap}
+.lever .barwrap{grid-column:1/-1;height:5px;background:rgba(255,255,255,.06);border-radius:1px;overflow:hidden}
+.lever .barwrap i{display:block;height:100%;width:0;background:var(--cyan);
+  box-shadow:0 0 6px rgba(79,209,197,.5);transition:width .6s cubic-bezier(.22,.61,.36,1)}
+.lever .sub{grid-column:1/-1;font-size:12px;color:var(--dim2)}
+.empty{font-size:13.5px;color:var(--dim2)}
+
+.footnote{font-size:12px;color:var(--dim2);margin-top:18px;line-height:1.7}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div>
+      <h1>EV range predictor</h1>
+      <p class="source" id="sourceLine"></p>
+    </div>
+    <div class="tag"><span class="dot"></span><span id="modelTag">model idle</span></div>
+  </header>
+
+  <div class="layout">
+    <form class="rail" id="driveForm">
+      <h2>Drive parameters</h2>
+      <div id="fields"></div>
+      <button type="submit">Run prediction</button>
+    </form>
+
+    <div>
+      <section class="hero">
+        <div class="gauge-wrap">
+          <svg viewBox="0 0 190 190" width="190" height="190">
+            <circle cx="95" cy="95" r="80" fill="none" stroke="rgba(255,255,255,.07)" stroke-width="10"/>
+            <circle id="gaugeArc" cx="95" cy="95" r="80" fill="none" stroke="var(--cyan)"
+              stroke-width="10" stroke-linecap="round"
+              stroke-dasharray="502" stroke-dashoffset="502"
+              transform="rotate(-90 95 95)"/>
+          </svg>
+          <div class="gauge-num">
+            <span class="km" id="rangeVal">—</span>
+            <span class="unit" id="energyNote">km remaining</span>
+          </div>
+        </div>
+        <div class="hero-side">
+          <h2>Range estimate</h2>
+          <p class="lead" id="heroLead">Set the drive parameters on the left, then run the prediction.</p>
+          <p class="error" id="errorLine" hidden></p>
+        </div>
+      </section>
+
+      <section class="split-panel">
+        <div class="cell">
+          <h2>Energy use</h2>
+          <p class="wh-stat"><span id="whVal">—</span><small>Wh/km</small></p>
+          <p class="wh-cap" id="whCaption">Run a prediction to see this drive's draw.</p>
+        </div>
+        <div class="cell">
+          <h2>Against 1,420 recorded drives</h2>
+          <svg id="histSvg" viewBox="0 0 560 90" width="100%" height="90" preserveAspectRatio="none"></svg>
+          <p class="wh-cap" id="histCaption">Distribution of Wh/km across every recorded drive window.</p>
+        </div>
+      </section>
+
+      <section class="levers-panel">
+        <h2>Where the energy goes</h2>
+        <div id="levers"><p class="empty">Run a prediction to see which change buys the most range.</p></div>
+      </section>
+
+      <p class="footnote" id="modelCard"></p>
+    </div>
+  </div>
+</div>
+
+<script>
+const FIELDS = [
+  {k:'avg_speed',            label:'Average speed',        min:5,   max:120, step:1,    unit:' km/h', val:45},
+  {k:'max_speed',            label:'Top speed',            min:10,  max:140, step:1,    unit:' km/h', val:65},
+  {k:'speed_std',            label:'Speed variability',    min:0,   max:35,  step:0.5,  unit:'',      val:14},
+  {k:'avg_accel',            label:'Acceleration',         min:0,   max:3,   step:0.05, unit:' m/s²', val:0.5},
+  {k:'brake_events_per_km',  label:'Braking per km',       min:0,   max:40,  step:0.5,  unit:'',      val:5},
+  {k:'idle_frac',            label:'Time stopped',         min:0,   max:0.6, step:0.01, unit:'%',     val:0.08, pct:true},
+  {k:'oat',                  label:'Outside temperature',  min:-15, max:36,  step:1,    unit:' °C',   val:12},
+  {k:'aux_power_w',          label:'Heating and cooling',  min:0,   max:4000,step:50,   unit:' W',    val:400},
+  {k:'soc',                  label:'Battery charge',       min:10,  max:100, step:1,    unit:'%',     val:80},
+];
+const GAUGE_CIRC = 2 * Math.PI * 80;
+const $ = id => document.getElementById(id);
+
+$('fields').innerHTML = FIELDS.map(f => `
+  <div class="field">
+    <div class="field-head"><label for="${f.k}">${f.label}</label><output id="${f.k}_out"></output></div>
+    <input type="range" id="${f.k}" min="${f.min}" max="${f.max}" step="${f.step}" value="${f.val}">
+  </div>`).join('');
+
+function show(f) {
+  const v = parseFloat($(f.k).value);
+  $(f.k + '_out').textContent = f.pct ? Math.round(v * 100) + '%'
+    : (Number.isInteger(f.step) ? v : v.toFixed(2).replace(/\.?0+$/, '')) + f.unit;
+}
+FIELDS.forEach(f => { $(f.k).addEventListener('input', () => show(f)); show(f); });
+
+let META = null;
+
+function drawHistogram(edges, counts, markerWh) {
+  const w = 560, h = 90, base = 72, gap = 2;
+  const max = Math.max(...counts);
+  const n = counts.length;
+  const barW = (w - gap * (n - 1)) / n;
+  let bars = counts.map((c, i) => {
+    const bh = max ? (c / max) * (base - 6) : 0;
+    return `<rect x="${i * (barW + gap)}" y="${base - bh}" width="${barW}" height="${bh}"
+      fill="rgba(255,255,255,.14)" />`;
+  }).join('');
+  let marker = '';
+  if (markerWh != null) {
+    const lo = edges[0], hi = edges[edges.length - 1];
+    const x = Math.min(Math.max((markerWh - lo) / (hi - lo), 0), 1) * w;
+    marker = `<line x1="${x}" y1="0" x2="${x}" y2="${base}" stroke="var(--cyan)" stroke-width="2"/>
+      <circle cx="${x}" cy="${base}" r="3.5" fill="var(--cyan)"/>`;
+  }
+  const lo = Math.round(edges[0]), hi = Math.round(edges[edges.length - 1]);
+  $('histSvg').innerHTML = `${bars}${marker}
+    <line x1="0" y1="${base}" x2="${w}" y2="${base}" stroke="rgba(255,255,255,.16)"/>
+    <text x="0" y="${h - 2}" font-family="JetBrains Mono" font-size="10" fill="#5C6975">${lo}</text>
+    <text x="${w}" y="${h - 2}" font-family="JetBrains Mono" font-size="10" fill="#5C6975" text-anchor="end">${hi} Wh/km</text>`;
+}
+
+fetch('/api/meta').then(r => r.json()).then(m => {
+  META = m;
+  $('sourceLine').textContent =
+    `Trained on ${m.n_windows.toLocaleString()} three-minute drive windows from ${m.n_trips} real trips (VED — Vehicle Energy Dataset).`;
+  $('modelTag').textContent = `${m.model.replace('_', ' ')} · ${m.n_trips} trips`;
+  $('modelCard').textContent =
+    `Mean error ${m.accuracy.wh_per_km.mae} Wh/km (R² ${m.accuracy.wh_per_km.r2}) versus ${m.baseline_mae} Wh/km for always guessing the median. Range error ${m.accuracy.range_km.mae} km. Scored with entire trips held out, never single readings.`;
+  drawHistogram(m.histogram.edges, m.histogram.counts, null);
+}).catch(() => {});
+
+$('driveForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const body = {};
+  FIELDS.forEach(f => body[f.k] = parseFloat($(f.k).value));
+  try {
+    const res = await fetch('/api/predict', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    const data = await res.json().catch(() => ({error: `Server returned ${res.status}`}));
+    if (!res.ok || data.error) throw new Error(data.error || `Server returned ${res.status}`);
+    $('errorLine').hidden = true;
+    render(data);
+  } catch (err) {
+    $('errorLine').hidden = false;
+    $('errorLine').textContent = err.message;
+  }
+});
+
+function render(d) {
+  $('rangeVal').textContent = Math.round(d.range_km);
+  $('energyNote').textContent = 'km remaining';
+  const arcPct = 1 - Math.min(d.percentile, 100) / 100; // efficient => fuller arc
+  $('gaugeArc').style.stroke = d.percentile > 60 ? 'var(--amber)' : 'var(--cyan)';
+  $('gaugeArc').style.strokeDashoffset = GAUGE_CIRC * (1 - Math.max(arcPct, 0.04));
+
+  $('heroLead').innerHTML = `${d.energy_left_kwh} kWh left in the pack. Drawing <b>${Math.round(d.wh_per_km)} Wh/km</b>, thriftier than ${100 - d.percentile}% of recorded drives.`;
+
+  $('whVal').textContent = Math.round(d.wh_per_km);
+  const gap = Math.round(d.wh_per_km - d.fleet_median);
+  $('whCaption').textContent = gap === 0
+    ? `Exactly the fleet median of ${d.fleet_median} Wh/km.`
+    : `${Math.abs(gap)} Wh/km ${gap > 0 ? 'above' : 'below'} the fleet median of ${d.fleet_median}.`;
+
+  if (META) drawHistogram(META.histogram.edges, META.histogram.counts, d.wh_per_km);
+
+  const levers = $('levers');
+  if (!d.tips.length) {
+    levers.innerHTML = '<p class="empty">Nothing obvious left to trim — this drive is already efficient.</p>';
+    return;
+  }
+  const top = d.tips[0].wh_saved;
+  levers.innerHTML = d.tips.map(t => `
+    <div class="lever">
+      <span class="name">${t.label}</span><span class="gain">+${t.extra_km} km</span>
+      <div class="barwrap"><i style="width:${Math.round(t.wh_saved / top * 100)}%"></i></div>
+      <span class="sub">Saves ${t.wh_saved} Wh/km · about ${t.pct_saved}% of this drive</span>
+    </div>`).join('');
+}
+</script>
+</body>
+</html>
